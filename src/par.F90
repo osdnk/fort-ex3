@@ -115,26 +115,45 @@ module seq
   !> @param[inout] X Rank 1 array of values.
   !> @param[in] n Number of rows
   !------------------------------------------------------------------------------
-  subroutine gauss_eliminate (A, X, N)
-    implicit none
+  subroutine gauss_eliminate(A, X, n)
+    integer(kind=8), intent(in) :: n
+    real(kind = 8), intent(inout) :: A(0:N, 0:N), X(0:N)
+    real ( kind = 8), codimension[:], allocatable :: concurrA(:,:)
+    real ( kind = 8), codimension[:], allocatable :: concurrX(:)
+    real(kind = 8) :: r !ratio
+    integer(kind=8) :: i, j
 
-    ! vars
-    integer (kind = 8) :: I, J
-    real(kind = PR) :: C
-    integer (kind = 8), intent(in) :: N
-    real(kind = PR), intent(inout) :: A(N, N), X(N)
+    allocate(concurrA(0:N, 0:N)[])
+    allocate(concurrX(0:N)[])
 
-    ! elimination as it
-    Do I = 1, N
-      Do J = 0, N
-        If (I /= J) then
-          C = A(I, J+1) / A(I, I + 1)
-          A(:, J + 1) = A(:, J + 1) - C * A(:, I + 1)
+    if (THIS_IMAGE() .eq. 1) then
+      concurrA(:,:)[1] = A(:,:)
+      concurrX(:)[1] = X(:)
+    end if
 
-          ! extra matrix
-          X(J + 1) = X(J + 1) - C * X(I + 1)
-        End If
-      End Do
-    End Do
+    do i = 0, N
+      ! scale row i to have 1 on the diagonal
+      if(THIS_IMAGE() .eq. 1) then
+        concurrX(i)[1] = concurrX(i)[1] / concurrA(i, i)[1]
+        concurrA(:, i)[1] = concurrA(:, i)[1] / concurrA(i, i)[1]
+      end if
+      sync all
+      do j = THIS_IMAGE() - 1, N, NUM_IMAGES()
+        IF ((i .NE. j) .AND. (ABS(concurrA(i, i)[1] - 0) > 1d-6)) THEN
+          r = concurrA(i, j)[1] / concurrA(i, i)[1]
+          concurrA(:,j)[1] = concurrA(:,j)[1] - r * concurrA(:, i)[1]
+          concurrX(j)[1] = concurrX(j)[1] - r * concurrX(i)[1]
+        END IF
+      END DO
+    END DO
+
+
+    if (THIS_IMAGE() .eq. 1) then
+      A(:,:) = concurrA(:,:)[1]
+      X(:) = concurrX(:)[1]
+    end if
+
+    deallocate(concurrA)
+    deallocate(concurrX)
   end subroutine gauss_eliminate
 end module
