@@ -23,7 +23,10 @@ $(ODIR)/%.o: $(SDIR)/%.F90
 	$(PATHS) $(FC) -c $< -o $@ $(FFLAGS)
 
 $(PDIR)/%.so: $(SDIR)/%.F90
-	F90=$(F) CC=$(CC) cd $(PDIR); $(F2P) -c ../$< -m $* 
+	F90=$(F) CC=$(CC) cd $(PDIR); $(F2P) -c ../$< -m $*
+
+doc: $(SDIR)/*.F90
+	$(DOX)
 
 clean:
 	find -type p -delete
